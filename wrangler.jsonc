@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "matroid-database",
+  "main": "src/index.ts",
+  "account_id" : "641ee17fdc075e1c2f3b2cfc7ffdea81",
+  "compatibility_date": "2025-05-01",
+  "routes": [
+    { "pattern": "matroids.icarm.cloud", "custom_domain": true }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}
