@@ -150,8 +150,6 @@ app.get('/enumeration/:slug/manifest.json', async (c) => {
     totalMatroids: summary.totalMatroids.toString(),
     totalBytes: summary.totalBytes,
     chunks: summary.chunks.map((ch) => ({
-      filename: ch.filename,
-      key: ch.key,
       url: chunkUrl(ch.key),
       firstIdx: ch.firstIdx.toString(),
       lastIdx: ch.lastIdx.toString(),
