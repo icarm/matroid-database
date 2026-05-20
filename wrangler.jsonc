@@ -10,6 +10,9 @@
   "observability": {
     "enabled": true
   },
+  "assets": {
+    "directory": "./assets"
+  },
   "r2_buckets": [
     {
       "binding": "BUCKET",

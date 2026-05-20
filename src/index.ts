@@ -10,7 +10,7 @@ app.get('/', (c) =>
 <head>
   <meta charset="utf-8">
   <title>matroids.icarm.cloud</title>
-  <style>${styles}</style>
+  <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <h1>matroid database</h1>
@@ -160,25 +160,6 @@ app.get('/enumeration/:slug/manifest.json', async (c) => {
   })
 })
 
-const styles = `
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-         max-width: 60rem; margin: 2rem auto; padding: 0 1rem; color: #222; }
-  h1 { margin-bottom: 0.25rem; }
-  .subtitle { color: #666; margin-top: 0; }
-  dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.25rem 1rem;
-       margin: 1rem 0 2rem; }
-  dt { color: #666; }
-  dd { margin: 0; font-variant-numeric: tabular-nums; }
-  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
-  th, td { padding: 0.3rem 0.6rem; text-align: right; border-bottom: 1px solid #eee; }
-  th:first-child, td:first-child { text-align: left; }
-  thead th { border-bottom: 2px solid #ccc; background: #fafafa; }
-  tbody tr:hover { background: #f7f7f7; }
-  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-  .empty { color: #888; font-style: italic; margin-top: 2rem; }
-  .error { color: #a00; }
-`
-
 function renderPage(s: Summary): string {
   const { slug, n, r, lineLen, chunks, totalBytes, totalMatroids } = s
   const rows = chunks
@@ -216,7 +197,7 @@ function renderPage(s: Summary): string {
 <head>
   <meta charset="utf-8">
   <title>${slug} — matroid enumeration</title>
-  <style>${styles}</style>
+  <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <h1>${slug}</h1>
@@ -247,7 +228,7 @@ function escapeHtml(s: string): string {
 function renderError(slug: string, msg: string): string {
   return `<!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><title>error</title><style>${styles}</style></head>
+<head><meta charset="utf-8"><title>error</title><link rel="stylesheet" href="/style.css"></head>
 <body>
   <h1>Invalid enumeration</h1>
   <p class="error">${escapeHtml(msg)}</p>
