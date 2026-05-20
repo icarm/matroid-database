@@ -88,18 +88,34 @@ async function listAllChunks(bucket: R2Bucket, prefix: string): Promise<Chunk[]>
   return chunks
 }
 
-app.get('/enumeration/:slug', async (c) => {
-  const slug = c.req.param('slug')
+const DOWNLOAD_BASE = 'https://matroids-download.icarm.cloud'
+
+function chunkUrl(key: string): string {
+  return `${DOWNLOAD_BASE}/${encodeURI(key)}`
+}
+
+type Summary = {
+  slug: string
+  n: number
+  r: number
+  lineLen: bigint
+  chunks: Chunk[]
+  totalBytes: number
+  totalMatroids: bigint
+}
+
+async function loadSummary(
+  bucket: R2Bucket,
+  slug: string,
+): Promise<Summary | null> {
   const m = slug.match(/^n(\d+)r(\d+)$/)
-  if (!m) {
-    return c.html(renderError(slug, 'Slug must look like n<N>r<R>, e.g. n13r03.'), 400)
-  }
+  if (!m) return null
   const n = Number(m[1])
   const r = Number(m[2])
   const lineLen = binomial(n, r)
 
   const prefix = `enumeration/${slug}:`
-  const chunks = await listAllChunks(c.env.BUCKET, prefix)
+  const chunks = await listAllChunks(bucket, prefix)
 
   const totalBytes = chunks.reduce((s, c) => s + c.size, 0)
   const totalMatroids = chunks.reduce(
@@ -107,7 +123,43 @@ app.get('/enumeration/:slug', async (c) => {
     0n,
   )
 
-  return c.html(renderPage(slug, n, r, lineLen, chunks, totalBytes, totalMatroids))
+  return { slug, n, r, lineLen, chunks, totalBytes, totalMatroids }
+}
+
+app.get('/enumeration/:slug', async (c) => {
+  const slug = c.req.param('slug')
+  const summary = await loadSummary(c.env.BUCKET, slug)
+  if (!summary) {
+    return c.html(renderError(slug, 'Slug must look like n<N>r<R>, e.g. n13r03.'), 400)
+  }
+  return c.html(renderPage(summary))
+})
+
+app.get('/enumeration/:slug/manifest.json', async (c) => {
+  const slug = c.req.param('slug')
+  const summary = await loadSummary(c.env.BUCKET, slug)
+  if (!summary) {
+    return c.json({ error: 'Slug must look like n<N>r<R>, e.g. n13r03.', slug }, 400)
+  }
+  return c.json({
+    slug: summary.slug,
+    n: summary.n,
+    r: summary.r,
+    lineLen: summary.lineLen.toString(),
+    chunkCount: summary.chunks.length,
+    totalMatroids: summary.totalMatroids.toString(),
+    totalBytes: summary.totalBytes,
+    chunks: summary.chunks.map((ch) => ({
+      filename: ch.filename,
+      key: ch.key,
+      url: chunkUrl(ch.key),
+      firstIdx: ch.firstIdx.toString(),
+      lastIdx: ch.lastIdx.toString(),
+      count: (ch.lastIdx - ch.firstIdx + 1n).toString(),
+      size: ch.size,
+      uploaded: ch.uploaded.toISOString(),
+    })),
+  })
 })
 
 const styles = `
@@ -129,19 +181,12 @@ const styles = `
   .error { color: #a00; }
 `
 
-function renderPage(
-  slug: string,
-  n: number,
-  r: number,
-  lineLen: bigint,
-  chunks: Chunk[],
-  totalBytes: number,
-  totalMatroids: bigint,
-): string {
+function renderPage(s: Summary): string {
+  const { slug, n, r, lineLen, chunks, totalBytes, totalMatroids } = s
   const rows = chunks
     .map((c) => {
       const count = c.lastIdx - c.firstIdx + 1n
-      const href = `https://matroids-download.icarm.cloud/${encodeURI(c.key)}`
+      const href = chunkUrl(c.key)
       return `<tr>
         <td><a href="${href}"><code>${c.filename}</code></a></td>
         <td>${fmtBigInt(c.firstIdx)} – ${fmtBigInt(c.lastIdx)}</td>
@@ -177,7 +222,7 @@ function renderPage(
 </head>
 <body>
   <h1>${slug}</h1>
-  <p class="subtitle">Matroids on ${n} elements of rank ${r}.</p>
+  <p class="subtitle">Matroids on ${n} elements of rank ${r}. <a href="/enumeration/${slug}/manifest.json">manifest.json</a></p>
   <dl>
     <dt>n</dt><dd>${n}</dd>
     <dt>r</dt><dd>${r}</dd>
