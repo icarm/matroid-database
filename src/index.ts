@@ -141,8 +141,9 @@ function renderPage(
   const rows = chunks
     .map((c) => {
       const count = c.lastIdx - c.firstIdx + 1n
+      const href = `https://matroids-download.icarm.cloud/${encodeURI(c.key)}`
       return `<tr>
-        <td><code>${c.filename}</code></td>
+        <td><a href="${href}"><code>${c.filename}</code></a></td>
         <td>${fmtBigInt(c.firstIdx)} – ${fmtBigInt(c.lastIdx)}</td>
         <td>${fmtBigInt(count)}</td>
         <td>${fmtBytes(c.size)}</td>
