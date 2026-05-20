@@ -4,7 +4,23 @@ type Bindings = { BUCKET: R2Bucket }
 
 const app = new Hono<{ Bindings: Bindings }>()
 
-app.get('/', (c) => c.text('Hello, world! — matroids.icarm.cloud'))
+app.get('/', (c) =>
+  c.html(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>matroids.icarm.cloud</title>
+  <style>${styles}</style>
+</head>
+<body>
+  <h1>matroid database</h1>
+  <p>Enumerations of matroids by (n, r), where n is the number of elements and r is the rank.</p>
+  <ul>
+    <li><a href="/enumeration/n13r03">n13r03</a> — matroids on 13 elements of rank 3</li>
+  </ul>
+</body>
+</html>`),
+)
 
 type Chunk = {
   key: string
