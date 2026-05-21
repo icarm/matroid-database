@@ -133,6 +133,9 @@ app.get('/enumeration/:slug', async (c) => {
   if (!summary) {
     return c.html(renderError(slug, 'Slug must look like n<N>r<R>, e.g. n13r03.'), 400)
   }
+  if (summary.chunks.length === 0) {
+    return c.html(renderError(slug, `No chunks found for ${slug}.`), 404)
+  }
   return c.html(renderPage(summary))
 })
 
@@ -141,6 +144,9 @@ app.get('/enumeration/:slug/manifest.json', async (c) => {
   const summary = await loadSummary(c.env.BUCKET, slug)
   if (!summary) {
     return c.json({ error: 'Slug must look like n<N>r<R>, e.g. n13r03.', slug }, 400)
+  }
+  if (summary.chunks.length === 0) {
+    return c.json({ error: `No chunks found for ${slug}.`, slug }, 404)
   }
   return c.json({
     slug: summary.slug,
@@ -177,21 +183,18 @@ function renderPage(s: Summary): string {
     })
     .join('')
 
-  const body =
-    chunks.length === 0
-      ? `<p class="empty">No chunks uploaded for <code>${slug}</code> yet.</p>`
-      : `<table>
-          <thead>
-            <tr>
-              <th>file</th>
-              <th>index range</th>
-              <th>count</th>
-              <th>size</th>
-              <th>uploaded (UTC)</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>`
+  const body = `<table>
+    <thead>
+      <tr>
+        <th>file</th>
+        <th>index range</th>
+        <th>count</th>
+        <th>size</th>
+        <th>uploaded (UTC)</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>`
 
   return `<!doctype html>
 <html lang="en">

@@ -60,12 +60,6 @@ code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
-.empty {
-  color: #888;
-  font-style: italic;
-  margin-top: 2rem;
-}
-
 .error {
   color: #a00;
 }
