@@ -63,3 +63,16 @@ code {
 .error {
   color: #a00;
 }
+
+footer {
+  margin-top: 3rem;
+  padding-top: 1rem;
+  border-top: 1px solid #eee;
+  text-align: center;
+  font-size: 0.875rem;
+  color: #888;
+}
+
+footer a {
+  color: #666;
+}

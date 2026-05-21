@@ -4,6 +4,12 @@ type Bindings = { BUCKET: R2Bucket }
 
 const app = new Hono<{ Bindings: Bindings }>()
 
+const footer = `<footer>
+    <a href="https://github.com/icarm/matroid-database">source</a>
+    ·
+    <a href="https://icarm.io">icarm.io</a>
+  </footer>`
+
 app.get('/', (c) =>
   c.html(`<!doctype html>
 <html lang="en">
@@ -19,6 +25,7 @@ app.get('/', (c) =>
     <li><a href="/enumeration/n10r04">n10r04</a> — matroids on 10 elements of rank 4</li>
     <li><a href="/enumeration/n13r03">n13r03</a> — matroids on 13 elements of rank 3</li>
   </ul>
+  ${footer}
 </body>
 </html>`),
 )
@@ -215,6 +222,7 @@ function renderPage(s: Summary): string {
     <dt>total size</dt><dd>${fmtBytes(totalBytes)}</dd>
   </dl>
   ${body}
+  ${footer}
 </body>
 </html>`
 }
@@ -237,6 +245,7 @@ function renderError(slug: string, msg: string): string {
   <h1>Invalid enumeration</h1>
   <p class="error">${escapeHtml(msg)}</p>
   <p>Got: <code>${escapeHtml(slug)}</code></p>
+  ${footer}
 </body>
 </html>`
 }
