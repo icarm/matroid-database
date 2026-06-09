@@ -23,6 +23,7 @@ app.get('/', (c) =>
   <p>Enumerations of matroids by (n, r), where n is the number of elements and r is the rank.</p>
   <ul>
     <li><a href="/enumeration/n10r04">n10r04</a> — matroids on 10 elements of rank 4</li>
+    <li><a href="/enumeration/n10r06">n10r06</a> — matroids on 10 elements of rank 6</li>
     <li><a href="/enumeration/n13r03">n13r03</a> — matroids on 13 elements of rank 3</li>
   </ul>
   ${footer}
