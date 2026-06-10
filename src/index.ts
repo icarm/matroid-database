@@ -44,6 +44,8 @@ app.get('/', async (c) => {
   <ul>
     ${items || '<li>no enumerations published yet</li>'}
   </ul>
+  <p>Tooling for downloading and reading the data is available at
+    <a href="https://github.com/icarm/matroid-database-client">matroid-database-client</a>.</p>
   ${footer}
 </body>
 </html>`)
@@ -364,6 +366,8 @@ function renderPage(m: Manifest, page: number, pageCount: number): string {
     <dt>matroids stored</dt><dd>${fmtInt(m.totalMatroids)}</dd>
     <dt>total size</dt><dd>${fmtBytes(m.totalBytes)}</dd>
   </dl>
+  <p>Tooling for downloading and reading the chunks below is available at
+    <a href="https://github.com/icarm/matroid-database-client">matroid-database-client</a>.</p>
   ${pagination}
   <table>
     <thead>
