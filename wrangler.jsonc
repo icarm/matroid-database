@@ -11,15 +11,11 @@
   // Cloudflare Access app in front of matroids.icarm.cloud.
   "workers_dev": false,
   "preview_urls": false,
-  "triggers": {
-    // Nightly manifest regeneration (safety net for /admin).
-    "crons": ["0 5 * * *"]
-  },
   "vars": {
     // Cloudflare Access config for /admin/*: team name (<team>.cloudflareaccess.com)
     // and the Access application's AUD tag. While empty, /admin/* returns 503.
-    "ACCESS_TEAM": "",
-    "ACCESS_AUD": ""
+    "ACCESS_TEAM": "icarm",
+    "ACCESS_AUD": "37ca27eb42edaa8d4f827314326f700743fc5edb1dc317f6361f342c214e7547"
   },
   "observability": {
     "enabled": true

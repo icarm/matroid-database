@@ -480,18 +480,4 @@ function renderError(slug: string, msg: string): string {
 </html>`
 }
 
-// Nightly safety net: regenerate every manifest so a forgotten click on
-// /admin can only leave a manifest stale until the next run.
-async function regenerateAll(env: Bindings): Promise<void> {
-  const slugs = await discoverSlugs(env.BUCKET)
-  for (const slug of slugs) {
-    await regenerateManifest(env.BUCKET, slug)
-  }
-}
-
-export default {
-  fetch: app.fetch,
-  scheduled: (_event: ScheduledController, env: Bindings, ctx: ExecutionContext) => {
-    ctx.waitUntil(regenerateAll(env))
-  },
-}
+export default app
