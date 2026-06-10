@@ -7,6 +7,20 @@
   "routes": [
     { "pattern": "matroids.icarm.cloud", "custom_domain": true }
   ],
+  // The custom domain must be the only way in: /admin/* relies on the
+  // Cloudflare Access app in front of matroids.icarm.cloud.
+  "workers_dev": false,
+  "preview_urls": false,
+  "triggers": {
+    // Nightly manifest regeneration (safety net for /admin).
+    "crons": ["0 5 * * *"]
+  },
+  "vars": {
+    // Cloudflare Access config for /admin/*: team name (<team>.cloudflareaccess.com)
+    // and the Access application's AUD tag. While empty, /admin/* returns 503.
+    "ACCESS_TEAM": "",
+    "ACCESS_AUD": ""
+  },
   "observability": {
     "enabled": true
   },

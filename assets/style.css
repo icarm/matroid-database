@@ -64,6 +64,35 @@ code {
   color: #a00;
 }
 
+.notice {
+  background: #f4f9f4;
+  border: 1px solid #cde3cd;
+  border-radius: 4px;
+  padding: 0.5rem 0.75rem;
+}
+
+.pagination {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin: 1rem 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.pagination .disabled {
+  color: #ccc;
+}
+
+td.missing {
+  text-align: center;
+  color: #888;
+}
+
+td form {
+  display: inline;
+  margin: 0;
+}
+
 footer {
   margin-top: 3rem;
   padding-top: 1rem;
