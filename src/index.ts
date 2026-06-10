@@ -54,12 +54,21 @@ type Chunk = {
   filename: string
   size: number
   uploaded: Date
-  firstIdx: bigint
-  lastIdx: bigint
+  firstIdx: number
+  lastIdx: number
 }
 
-function binomial(n: number, r: number): bigint {
-  if (r < 0 || r > n) return 0n
+// Counts and indexes top out in the tens of trillions, well below
+// Number.MAX_SAFE_INTEGER; guard anyway so an out-of-range value fails
+// loudly instead of silently losing precision.
+function toSafeInteger(s: string | bigint): number {
+  const n = Number(s)
+  if (!Number.isSafeInteger(n)) throw new Error(`integer out of safe range: ${s}`)
+  return n
+}
+
+function binomial(n: number, r: number): number {
+  if (r < 0 || r > n) return 0
   const k = Math.min(r, n - r)
   let num = 1n
   let den = 1n
@@ -67,7 +76,7 @@ function binomial(n: number, r: number): bigint {
     num *= BigInt(n - i)
     den *= BigInt(i + 1)
   }
-  return num / den
+  return toSafeInteger(num / den)
 }
 
 function fmtBytes(bytes: number): string {
@@ -82,7 +91,7 @@ function fmtBytes(bytes: number): string {
   return `${v.toFixed(2)} ${units[u]}`
 }
 
-function fmtBigInt(n: bigint): string {
+function fmtInt(n: number): string {
   const s = n.toString()
   return s.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 }
@@ -107,17 +116,14 @@ async function listAllChunks(bucket: R2Bucket, prefix: string): Promise<Chunk[]>
         filename,
         size: obj.size,
         uploaded: obj.uploaded,
-        firstIdx: BigInt(m[1]),
-        lastIdx: BigInt(m[2]),
+        firstIdx: toSafeInteger(m[1]),
+        lastIdx: toSafeInteger(m[2]),
       })
     }
     if (!page.truncated) break
     cursor = page.cursor
   }
-  chunks.sort((a, b) => {
-    if (a.firstIdx !== b.firstIdx) return a.firstIdx < b.firstIdx ? -1 : 1
-    return a.lastIdx < b.lastIdx ? -1 : a.lastIdx > b.lastIdx ? 1 : 0
-  })
+  chunks.sort((a, b) => a.firstIdx - b.firstIdx || a.lastIdx - b.lastIdx)
   return chunks
 }
 
@@ -132,16 +138,15 @@ function chunkUrl(key: string): string {
 //
 // A precomputed listing of all chunks of an enumeration, stored at
 // enumeration-manifest/<slug>.json so the public pages never have to page
-// through the (possibly 30k+) chunk objects. Index-like fields are encoded
-// as decimal strings: counts can exceed Number.MAX_SAFE_INTEGER.
+// through the (possibly 30k+) chunk objects.
 // ---------------------------------------------------------------------------
 
 type ManifestChunk = {
   url: string
   filename: string
-  firstIdx: string
-  lastIdx: string
-  count: string
+  firstIdx: number
+  lastIdx: number
+  count: number
   size: number
   uploaded: string
 }
@@ -150,10 +155,10 @@ type Manifest = {
   slug: string
   n: number
   r: number
-  lineLen: string
+  lineLen: number
   generatedAt: string
   chunkCount: number
-  totalMatroids: string
+  totalMatroids: number
   totalBytes: number
   chunks: ManifestChunk[]
 }
@@ -176,26 +181,23 @@ async function buildManifest(bucket: R2Bucket, slug: string): Promise<Manifest |
 
   const chunks = await listAllChunks(bucket, chunkPrefix(slug))
   const totalBytes = chunks.reduce((s, c) => s + c.size, 0)
-  const totalMatroids = chunks.reduce(
-    (s, c) => s + (c.lastIdx - c.firstIdx + 1n),
-    0n,
-  )
+  const totalMatroids = chunks.reduce((s, c) => s + (c.lastIdx - c.firstIdx + 1), 0)
 
   return {
     slug,
     n,
     r,
-    lineLen: binomial(n, r).toString(),
+    lineLen: binomial(n, r),
     generatedAt: new Date().toISOString(),
     chunkCount: chunks.length,
-    totalMatroids: totalMatroids.toString(),
+    totalMatroids,
     totalBytes,
     chunks: chunks.map((c) => ({
       url: chunkUrl(c.key),
       filename: c.filename,
-      firstIdx: c.firstIdx.toString(),
-      lastIdx: c.lastIdx.toString(),
-      count: (c.lastIdx - c.firstIdx + 1n).toString(),
+      firstIdx: c.firstIdx,
+      lastIdx: c.lastIdx,
+      count: c.lastIdx - c.firstIdx + 1,
       size: c.size,
       uploaded: c.uploaded.toISOString(),
     })),
@@ -215,7 +217,7 @@ async function regenerateManifest(bucket: R2Bucket, slug: string): Promise<Manif
     customMetadata: {
       generatedAt: manifest.generatedAt,
       chunkCount: String(manifest.chunkCount),
-      totalMatroids: manifest.totalMatroids,
+      totalMatroids: String(manifest.totalMatroids),
       totalBytes: String(manifest.totalBytes),
     },
   })
@@ -325,7 +327,7 @@ function renderPagination(m: Manifest, page: number, pageCount: number): string 
   return `<nav class="pagination">
     ${link(1, '« first', page > 1)}
     ${link(page - 1, '‹ prev', page > 1)}
-    <span>page ${fmtBigInt(BigInt(page))} of ${fmtBigInt(BigInt(pageCount))} (chunks ${fmtBigInt(BigInt(first))}–${fmtBigInt(BigInt(last))} of ${fmtBigInt(BigInt(m.chunks.length))})</span>
+    <span>page ${fmtInt(page)} of ${fmtInt(pageCount)} (chunks ${fmtInt(first)}–${fmtInt(last)} of ${fmtInt(m.chunks.length)})</span>
     ${link(page + 1, 'next ›', page < pageCount)}
     ${link(pageCount, 'last »', page < pageCount)}
   </nav>`
@@ -334,8 +336,8 @@ function renderPagination(m: Manifest, page: number, pageCount: number): string 
 function renderPage(m: Manifest, page: number, pageCount: number): string {
   const row = (c: ManifestChunk) => `<tr>
         <td><a href="${c.url}"><code>${c.filename}</code></a></td>
-        <td>${fmtBigInt(BigInt(c.firstIdx))} – ${fmtBigInt(BigInt(c.lastIdx))}</td>
-        <td>${fmtBigInt(BigInt(c.count))}</td>
+        <td>${fmtInt(c.firstIdx)} – ${fmtInt(c.lastIdx)}</td>
+        <td>${fmtInt(c.count)}</td>
         <td>${fmtBytes(c.size)}</td>
         <td>${fmtTimestamp(c.uploaded)}</td>
       </tr>`
@@ -357,9 +359,9 @@ function renderPage(m: Manifest, page: number, pageCount: number): string {
   <dl>
     <dt>n</dt><dd>${m.n}</dd>
     <dt>r</dt><dd>${m.r}</dd>
-    <dt>line length</dt><dd>C(${m.n},${m.r}) = ${fmtBigInt(BigInt(m.lineLen))}</dd>
-    <dt>chunks</dt><dd>${fmtBigInt(BigInt(m.chunkCount))}</dd>
-    <dt>matroids stored</dt><dd>${fmtBigInt(BigInt(m.totalMatroids))}</dd>
+    <dt>line length</dt><dd>C(${m.n},${m.r}) = ${fmtInt(m.lineLen)}</dd>
+    <dt>chunks</dt><dd>${fmtInt(m.chunkCount)}</dd>
+    <dt>matroids stored</dt><dd>${fmtInt(m.totalMatroids)}</dd>
     <dt>total size</dt><dd>${fmtBytes(m.totalBytes)}</dd>
   </dl>
   ${pagination}
@@ -408,8 +410,8 @@ app.get('/admin', async (c) => {
     .map((slug, i) => {
       const meta = heads[i]?.customMetadata
       const status = meta
-        ? `<td>${fmtBigInt(BigInt(meta.chunkCount ?? '0'))}</td>
-           <td>${fmtBigInt(BigInt(meta.totalMatroids ?? '0'))}</td>
+        ? `<td>${fmtInt(Number(meta.chunkCount ?? '0'))}</td>
+           <td>${fmtInt(Number(meta.totalMatroids ?? '0'))}</td>
            <td>${fmtBytes(Number(meta.totalBytes ?? '0'))}</td>
            <td>${meta.generatedAt ? fmtTimestamp(meta.generatedAt) : '?'}</td>`
         : `<td colspan="4" class="missing">no manifest</td>`
@@ -425,7 +427,7 @@ app.get('/admin', async (c) => {
   const chunks = c.req.query('chunks')
   const flash =
     regenerated && SLUG_RE.test(regenerated) && /^\d+$/.test(chunks ?? '')
-      ? `<p class="notice">Regenerated manifest for <strong>${regenerated}</strong>: ${fmtBigInt(BigInt(chunks!))} chunks.</p>`
+      ? `<p class="notice">Regenerated manifest for <strong>${regenerated}</strong>: ${fmtInt(Number(chunks!))} chunks.</p>`
       : ''
 
   const who = c.get('accessPayload')?.email

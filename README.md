@@ -33,8 +33,9 @@ Each enumeration's chunk listing is precomputed into a manifest stored at
 `enumeration-manifest/<slug>.json` in the bucket, so public pages read one
 object instead of paging through tens of thousands of chunk keys. Index-like
 fields in the manifest (`firstIdx`, `lastIdx`, `count`, `totalMatroids`,
-`lineLen`) are decimal **strings**, since counts can exceed
-`Number.MAX_SAFE_INTEGER`.
+`lineLen`) are native JSON integers; counts top out in the tens of trillions,
+well below `Number.MAX_SAFE_INTEGER`, and manifest generation fails loudly if
+a value ever leaves the safe-integer range.
 
 Manifests are regenerated from the admin page at `/admin` (click the button
 after uploading a batch of chunks). An enumeration is published once its
