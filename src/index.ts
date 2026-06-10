@@ -23,11 +23,12 @@ const footer = `<footer>
   </footer>`
 
 app.get('/', async (c) => {
-  const slugs = await listManifestSlugs(c.env.BUCKET)
-  const items = slugs
-    .map((slug) => {
+  const enums = await listPublishedEnumerations(c.env.BUCKET)
+  const items = enums
+    .map(({ slug, totalMatroids }) => {
       const m = slug.match(SLUG_RE)!
-      return `<li><a href="/enumeration/${slug}">${slug}</a> — matroids on ${Number(m[1])} elements of rank ${Number(m[2])}</li>`
+      const what = totalMatroids > 0 ? `${fmtInt(totalMatroids)} matroids` : 'matroids'
+      return `<li><a href="/enumeration/${slug}">${slug}</a> — ${what} on ${Number(m[1])} elements of rank ${Number(m[2])}</li>`
     })
     .join('\n    ')
   c.header('Cache-Control', PUBLIC_CACHE)
@@ -233,24 +234,36 @@ async function loadStoredManifest(bucket: R2Bucket, slug: string): Promise<Manif
 }
 
 // Enumerations that have a manifest; these are the published ones the
-// home page links to.
-async function listManifestSlugs(bucket: R2Bucket): Promise<string[]> {
-  const slugs: string[] = []
+// home page links to. The manifests' R2 custom metadata carries the counts,
+// so one list call yields everything the home page needs.
+type PublishedEnumeration = {
+  slug: string
+  totalMatroids: number
+}
+
+async function listPublishedEnumerations(bucket: R2Bucket): Promise<PublishedEnumeration[]> {
+  const enums: PublishedEnumeration[] = []
   let cursor: string | undefined
   for (;;) {
     const page: R2Objects = await bucket.list({
       prefix: 'enumeration-manifest/',
       cursor,
       limit: 1000,
+      include: ['customMetadata'],
     })
     for (const obj of page.objects) {
       const m = obj.key.match(/^enumeration-manifest\/(n\d+r\d+)\.json$/)
-      if (m) slugs.push(m[1])
+      if (m) {
+        enums.push({
+          slug: m[1],
+          totalMatroids: Number(obj.customMetadata?.totalMatroids ?? 0),
+        })
+      }
     }
     if (!page.truncated) break
     cursor = page.cursor
   }
-  return slugs.sort()
+  return enums.sort((a, b) => (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0))
 }
 
 async function discoverSlugs(bucket: R2Bucket): Promise<string[]> {
