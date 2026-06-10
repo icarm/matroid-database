@@ -22,8 +22,16 @@ const footer = `<footer>
     <a href="https://icarm.io">icarm.io</a>
   </footer>`
 
-app.get('/', (c) =>
-  c.html(`<!doctype html>
+app.get('/', async (c) => {
+  const slugs = await listManifestSlugs(c.env.BUCKET)
+  const items = slugs
+    .map((slug) => {
+      const m = slug.match(SLUG_RE)!
+      return `<li><a href="/enumeration/${slug}">${slug}</a> — matroids on ${Number(m[1])} elements of rank ${Number(m[2])}</li>`
+    })
+    .join('\n    ')
+  c.header('Cache-Control', PUBLIC_CACHE)
+  return c.html(`<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -34,14 +42,12 @@ app.get('/', (c) =>
   <h1>matroid database</h1>
   <p>Enumerations of matroids by (n, r), where n is the number of elements and r is the rank.</p>
   <ul>
-    <li><a href="/enumeration/n10r04">n10r04</a> — matroids on 10 elements of rank 4</li>
-    <li><a href="/enumeration/n10r06">n10r06</a> — matroids on 10 elements of rank 6</li>
-    <li><a href="/enumeration/n13r03">n13r03</a> — matroids on 13 elements of rank 3</li>
+    ${items || '<li>no enumerations published yet</li>'}
   </ul>
   ${footer}
 </body>
-</html>`),
-)
+</html>`)
+})
 
 type Chunk = {
   key: string
@@ -92,8 +98,8 @@ async function listAllChunks(bucket: R2Bucket, prefix: string): Promise<Chunk[]>
     const page: R2Objects = await bucket.list({ prefix, cursor, limit: 1000 })
     for (const obj of page.objects) {
       const filename = obj.key.slice(prefix.length)
-      // Only <firstIdx>-<lastIdx>.sz.xz files are chunks; the prefix also
-      // holds manifest.json, which must never be treated as a chunk.
+      // Only <firstIdx>-<lastIdx>.sz.xz files are chunks; anything else
+      // under the prefix is ignored.
       const m = filename.match(/^(\d+)-(\d+)\.sz\.xz$/)
       if (!m) continue
       chunks.push({
@@ -125,7 +131,7 @@ function chunkUrl(key: string): string {
 // Manifest
 //
 // A precomputed listing of all chunks of an enumeration, stored at
-// enumeration/<slug>:manifest.json so the public pages never have to page
+// enumeration-manifest/<slug>.json so the public pages never have to page
 // through the (possibly 30k+) chunk objects. Index-like fields are encoded
 // as decimal strings: counts can exceed Number.MAX_SAFE_INTEGER.
 // ---------------------------------------------------------------------------
@@ -159,7 +165,7 @@ function chunkPrefix(slug: string): string {
 }
 
 function manifestKey(slug: string): string {
-  return `${chunkPrefix(slug)}manifest.json`
+  return `enumeration-manifest/${slug}.json`
 }
 
 async function buildManifest(bucket: R2Bucket, slug: string): Promise<Manifest | null> {
@@ -222,6 +228,27 @@ async function loadStoredManifest(bucket: R2Bucket, slug: string): Promise<Manif
   return obj.json<Manifest>()
 }
 
+// Enumerations that have a manifest; these are the published ones the
+// home page links to.
+async function listManifestSlugs(bucket: R2Bucket): Promise<string[]> {
+  const slugs: string[] = []
+  let cursor: string | undefined
+  for (;;) {
+    const page: R2Objects = await bucket.list({
+      prefix: 'enumeration-manifest/',
+      cursor,
+      limit: 1000,
+    })
+    for (const obj of page.objects) {
+      const m = obj.key.match(/^enumeration-manifest\/(n\d+r\d+)\.json$/)
+      if (m) slugs.push(m[1])
+    }
+    if (!page.truncated) break
+    cursor = page.cursor
+  }
+  return slugs.sort()
+}
+
 async function discoverSlugs(bucket: R2Bucket): Promise<string[]> {
   const slugs: string[] = []
   let cursor: string | undefined
@@ -253,20 +280,15 @@ app.get('/enumeration/:slug', async (c) => {
   if (!SLUG_RE.test(slug)) {
     return c.html(renderError(slug, 'Slug must look like n<N>r<R>, e.g. n13r03.'), 400)
   }
-  let manifest = await loadStoredManifest(c.env.BUCKET, slug)
-  let live = false
-  if (!manifest) {
-    manifest = await buildManifest(c.env.BUCKET, slug)
-    live = true
-  }
+  const manifest = await loadStoredManifest(c.env.BUCKET, slug)
   if (!manifest || manifest.chunkCount === 0) {
-    return c.html(renderError(slug, `No chunks found for ${slug}.`), 404)
+    return c.html(renderError(slug, `No manifest found for ${slug}.`), 404)
   }
   const pageCount = Math.max(1, Math.ceil(manifest.chunks.length / PAGE_SIZE))
   const rawPage = Number(c.req.query('page') ?? '1')
   const page = Number.isInteger(rawPage) ? Math.min(Math.max(rawPage, 1), pageCount) : 1
   c.header('Cache-Control', PUBLIC_CACHE)
-  return c.html(renderPage(manifest, live, page, pageCount))
+  return c.html(renderPage(manifest, page, pageCount))
 })
 
 app.get('/enumeration/:slug/manifest.json', async (c) => {
@@ -275,20 +297,15 @@ app.get('/enumeration/:slug/manifest.json', async (c) => {
     return c.json({ error: 'Slug must look like n<N>r<R>, e.g. n13r03.', slug }, 400)
   }
   const obj = await c.env.BUCKET.get(manifestKey(slug))
-  if (obj) {
-    return new Response(obj.body, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': PUBLIC_CACHE,
-      },
-    })
+  if (!obj) {
+    return c.json({ error: `No manifest found for ${slug}.`, slug }, 404)
   }
-  const manifest = await buildManifest(c.env.BUCKET, slug)
-  if (!manifest || manifest.chunkCount === 0) {
-    return c.json({ error: `No chunks found for ${slug}.`, slug }, 404)
-  }
-  c.header('Cache-Control', PUBLIC_CACHE)
-  return c.json(manifest)
+  return new Response(obj.body, {
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': PUBLIC_CACHE,
+    },
+  })
 })
 
 // Chunk rows per page; a 30k-row table is ~10 MB of HTML, so large
@@ -314,7 +331,7 @@ function renderPagination(m: Manifest, page: number, pageCount: number): string 
   </nav>`
 }
 
-function renderPage(m: Manifest, live: boolean, page: number, pageCount: number): string {
+function renderPage(m: Manifest, page: number, pageCount: number): string {
   const row = (c: ManifestChunk) => `<tr>
         <td><a href="${c.url}"><code>${c.filename}</code></a></td>
         <td>${fmtBigInt(BigInt(c.firstIdx))} – ${fmtBigInt(BigInt(c.lastIdx))}</td>
@@ -326,10 +343,6 @@ function renderPage(m: Manifest, live: boolean, page: number, pageCount: number)
   const rows = m.chunks.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(row).join('')
   const pagination = renderPagination(m, page, pageCount)
 
-  const provenance = live
-    ? `<p class="notice">Listing computed live from the bucket; no precomputed manifest exists yet for this enumeration.</p>`
-    : ''
-
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -338,9 +351,9 @@ function renderPage(m: Manifest, live: boolean, page: number, pageCount: number)
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
+  <p class="breadcrumb"><a href="/">← all enumerations</a></p>
   <h1>${m.slug}</h1>
   <p class="subtitle">Matroids on ${m.n} elements of rank ${m.r}. <a href="/enumeration/${m.slug}/manifest.json">manifest.json</a></p>
-  ${provenance}
   <dl>
     <dt>n</dt><dd>${m.n}</dd>
     <dt>r</dt><dd>${m.r}</dd>
@@ -472,6 +485,7 @@ function renderError(slug: string, msg: string): string {
 <html lang="en">
 <head><meta charset="utf-8"><title>error</title><link rel="stylesheet" href="/style.css"></head>
 <body>
+  <p class="breadcrumb"><a href="/">← all enumerations</a></p>
   <h1>Invalid enumeration</h1>
   <p class="error">${escapeHtml(msg)}</p>
   <p>Got: <code>${escapeHtml(slug)}</code></p>

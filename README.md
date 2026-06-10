@@ -30,15 +30,16 @@ will create the DNS record and attach the route on first deploy.
 ## Manifests
 
 Each enumeration's chunk listing is precomputed into a manifest stored at
-`enumeration/<slug>:manifest.json` in the bucket, so public pages read one
+`enumeration-manifest/<slug>.json` in the bucket, so public pages read one
 object instead of paging through tens of thousands of chunk keys. Index-like
 fields in the manifest (`firstIdx`, `lastIdx`, `count`, `totalMatroids`,
 `lineLen`) are decimal **strings**, since counts can exceed
 `Number.MAX_SAFE_INTEGER`.
 
 Manifests are regenerated from the admin page at `/admin` (click the button
-after uploading a batch of chunks). If a manifest is missing, pages fall back
-to listing the bucket live.
+after uploading a batch of chunks). An enumeration is published once its
+manifest exists: the home page links to it and its pages render; without a
+manifest, its pages 404.
 
 ## Admin auth (Cloudflare Access)
 
